@@ -1,0 +1,1819 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import mysql.connector
+from mysql.connector import Error
+import re
+
+
+
+DB_HOST = "localhost"
+DB_USER = "root"
+DB_PASSWORD = "2005"   
+DB_NAME = "stock_management"
+
+
+APP_USERNAME = "mahesh"
+APP_PASSWORD = "mahesh123"
+
+
+
+def get_server_connection():
+    return mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
+
+
+def setup_database():
+    """
+    Creates database and table automatically.
+    """
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_server_connection()
+        cursor = conn.cursor()
+
+        
+        cursor.execute(
+            f"CREATE DATABASE IF NOT EXISTS {DB_NAME}"
+        )
+
+       
+        cursor.execute(f"USE {DB_NAME}")
+
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS stocks (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                product_name VARCHAR(100) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                quantity INT NOT NULL,
+                price DECIMAL(10,2) NOT NULL,
+                supplier VARCHAR(100) NOT NULL,
+                phone VARCHAR(15) NOT NULL,
+                email VARCHAR(100) NOT NULL
+            )
+        """)
+
+        conn.commit()
+        return True
+
+    except Error as e:
+        messagebox.showerror(
+            "MySQL Error",
+            f"Could not connect to MySQL.\n\n{e}\n\n"
+            "Make sure MySQL Server is running and "
+            "check your MySQL password."
+        )
+        return False
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+def get_db_connection():
+    return mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+
+
+
+def valid_phone(phone):
+    return bool(re.fullmatch(r"[0-9]{10}", phone))
+
+
+def valid_email(email):
+    return bool(
+        re.fullmatch(
+            r"[^@\s]+@[^@\s]+\.[^@\s]+",
+            email
+        )
+    )
+
+
+def valid_number(value):
+    try:
+        return int(value) >= 0
+    except ValueError:
+        return False
+
+
+def valid_price(value):
+    try:
+        return float(value) >= 0
+    except ValueError:
+        return False
+
+
+
+class StockManagementSystem:
+
+    def __init__(self, root):
+
+        self.root = root
+
+        self.root.title(
+            "Stock Management System"
+        )
+
+        self.root.geometry(
+            "1100x700"
+        )
+
+        self.root.minsize(
+            950,
+            600
+        )
+
+        self.selected_id = None
+        self.entries = {}
+
+        self.show_login()
+
+   
+    def clear_root(self):
+
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+   
+    def show_login(self):
+
+        self.clear_root()
+
+        self.root.configure(
+            bg="#eef2f7"
+        )
+
+        card = tk.Frame(
+            self.root,
+            bg="white",
+            width=430,
+            height=450,
+            bd=1,
+            relief="solid"
+        )
+
+        card.place(
+            relx=0.5,
+            rely=0.5,
+            anchor="center"
+        )
+
+        card.pack_propagate(False)
+
+        tk.Label(
+            card,
+            text="STOCK MANAGEMENT",
+            font=("Segoe UI", 22, "bold"),
+            bg="white",
+            fg="#17365d"
+        ).pack(pady=(45, 5))
+
+        tk.Label(
+            card,
+            text="System Login",
+            font=("Segoe UI", 12),
+            bg="white",
+            fg="#666666"
+        ).pack(
+            pady=(0, 30)
+        )
+
+        tk.Label(
+            card,
+            text="Username",
+            font=("Segoe UI", 10, "bold"),
+            bg="white"
+        ).pack(
+            fill="x",
+            padx=55
+        )
+
+        self.login_username = tk.Entry(
+            card,
+            font=("Segoe UI", 11),
+            relief="solid",
+            bd=1
+        )
+
+        self.login_username.pack(
+            fill="x",
+            padx=55,
+            pady=(5, 18),
+            ipady=7
+        )
+
+        tk.Label(
+            card,
+            text="Password",
+            font=("Segoe UI", 10, "bold"),
+            bg="white"
+        ).pack(
+            fill="x",
+            padx=55
+        )
+
+        self.login_password = tk.Entry(
+            card,
+            show="*",
+            font=("Segoe UI", 11),
+            relief="solid",
+            bd=1
+        )
+
+        self.login_password.pack(
+            fill="x",
+            padx=55,
+            pady=(5, 25),
+            ipady=7
+        )
+
+        tk.Button(
+            card,
+            text="LOGIN",
+            command=self.login,
+            bg="#17365d",
+            fg="white",
+            font=("Segoe UI", 11, "bold"),
+            relief="flat",
+            cursor="hand2"
+        ).pack(
+            fill="x",
+            padx=55,
+            ipady=9
+        )
+
+        tk.Label(
+            card,
+            text="Demo Login: admin / admin123",
+            font=("Segoe UI", 9),
+            bg="white",
+            fg="#777777"
+        ).pack(pady=18)
+
+        self.login_username.focus_set()
+
+    
+
+    def login(self):
+
+        username = self.login_username.get().strip()
+        password = self.login_password.get()
+
+        if not username or not password:
+
+            messagebox.showwarning(
+                "Login",
+                "Please enter username and password."
+            )
+
+            return
+
+        if (
+            username == APP_USERNAME
+            and password == APP_PASSWORD
+        ):
+
+            if setup_database():
+                self.show_dashboard()
+
+        else:
+
+            messagebox.showerror(
+                "Login Failed",
+                "Invalid username or password."
+            )
+
+   
+    def show_dashboard(self):
+
+        self.clear_root()
+
+        self.root.configure(
+            bg="#eef2f7"
+        )
+
+        # HEADER
+        header = tk.Frame(
+            self.root,
+            bg="#17365d",
+            height=75
+        )
+
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        tk.Label(
+            header,
+            text="STOCK MANAGEMENT SYSTEM",
+            font=("Segoe UI", 20, "bold"),
+            bg="#17365d",
+            fg="white"
+        ).pack(
+            side="left",
+            padx=25,
+            pady=18
+        )
+
+        tk.Button(
+            header,
+            text="Logout",
+            command=self.logout,
+            bg="#b02a37",
+            fg="white",
+            font=("Segoe UI", 10, "bold"),
+            relief="flat",
+            cursor="hand2"
+        ).pack(
+            side="right",
+            padx=25,
+            pady=20,
+            ipadx=10
+        )
+
+       
+        self.create_navigation()
+
+      
+        content = tk.Frame(
+            self.root,
+            bg="#eef2f7"
+        )
+
+        content.pack(
+            fill="both",
+            expand=True,
+            padx=30,
+            pady=30
+        )
+
+        tk.Label(
+            content,
+            text="Dashboard",
+            font=("Segoe UI", 24, "bold"),
+            bg="#eef2f7",
+            fg="#17365d"
+        ).pack(anchor="w")
+
+        tk.Label(
+            content,
+            text="Manage your stock records easily using MySQL.",
+            font=("Segoe UI", 11),
+            bg="#eef2f7",
+            fg="#666666"
+        ).pack(
+            anchor="w",
+            pady=(2, 25)
+        )
+
+        total_products, total_quantity, total_value = self.get_stats()
+
+        stats = tk.Frame(
+            content,
+            bg="#eef2f7"
+        )
+
+        stats.pack(
+            fill="x"
+        )
+
+        self.stat_card(
+            stats,
+            "Total Products",
+            str(total_products),
+            0
+        )
+
+        self.stat_card(
+            stats,
+            "Total Quantity",
+            str(total_quantity),
+            1
+        )
+
+        self.stat_card(
+            stats,
+            "Stock Value",
+            f"₹ {total_value:,.2f}",
+            2
+        )
+
+        info = tk.Frame(
+            content,
+            bg="white",
+            bd=1,
+            relief="solid"
+        )
+
+        info.pack(
+            fill="both",
+            expand=True,
+            pady=30
+        )
+
+        tk.Label(
+            info,
+            text="Quick Actions",
+            font=("Segoe UI", 15, "bold"),
+            bg="white",
+            fg="#17365d"
+        ).pack(
+            anchor="w",
+            padx=25,
+            pady=(25, 15)
+        )
+
+        buttons = tk.Frame(
+            info,
+            bg="white"
+        )
+
+        buttons.pack(
+            anchor="w",
+            padx=25
+        )
+
+        tk.Button(
+            buttons,
+            text="+ Add New Record",
+            command=self.show_add,
+            bg="#17365d",
+            fg="white",
+            relief="flat",
+            cursor="hand2"
+        ).pack(
+            side="left",
+            padx=5,
+            ipadx=12,
+            ipady=8
+        )
+
+        tk.Button(
+            buttons,
+            text="View All Records",
+            command=self.show_view,
+            bg="#17365d",
+            fg="white",
+            relief="flat",
+            cursor="hand2"
+        ).pack(
+            side="left",
+            padx=5,
+            ipadx=12,
+            ipady=8
+        )
+
+        tk.Button(
+            buttons,
+            text="Search Stock",
+            command=self.show_search,
+            bg="#17365d",
+            fg="white",
+            relief="flat",
+            cursor="hand2"
+        ).pack(
+            side="left",
+            padx=5,
+            ipadx=12,
+            ipady=8
+        )
+
+    
+
+    def get_stats(self):
+
+        conn = None
+        cursor = None
+
+        try:
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT
+                    COUNT(*),
+                    COALESCE(SUM(quantity), 0),
+                    COALESCE(SUM(quantity * price), 0)
+                FROM stocks
+            """)
+
+            row = cursor.fetchone()
+
+            return (
+                int(row[0]),
+                int(row[1]),
+                float(row[2])
+            )
+
+        except Error:
+
+            return 0, 0, 0
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if conn:
+                conn.close()
+
+    def stat_card(
+        self,
+        parent,
+        title,
+        value,
+        column
+    ):
+
+        card = tk.Frame(
+            parent,
+            bg="white",
+            bd=1,
+            relief="solid",
+            height=110
+        )
+
+        card.grid(
+            row=0,
+            column=column,
+            padx=8,
+            sticky="nsew"
+        )
+
+        card.grid_propagate(False)
+
+        parent.columnconfigure(
+            column,
+            weight=1
+        )
+
+        tk.Label(
+            card,
+            text=title,
+            font=("Segoe UI", 10),
+            bg="white",
+            fg="#777777"
+        ).pack(
+            anchor="w",
+            padx=18,
+            pady=(17, 2)
+        )
+
+        tk.Label(
+            card,
+            text=value,
+            font=("Segoe UI", 20, "bold"),
+            bg="white",
+            fg="#17365d"
+        ).pack(
+            anchor="w",
+            padx=18
+        )
+
+   
+
+    def create_navigation(self):
+
+        nav = tk.Frame(
+            self.root,
+            bg="white",
+            height=55
+        )
+
+        nav.pack(
+            fill="x"
+        )
+
+        nav.pack_propagate(False)
+
+        buttons = [
+            ("Dashboard", self.show_dashboard),
+            ("Add Record", self.show_add),
+            ("View Records", self.show_view),
+            ("Search", self.show_search)
+        ]
+
+        for text, command in buttons:
+
+            tk.Button(
+                nav,
+                text=text,
+                command=command,
+                bg="white",
+                fg="#17365d",
+                font=("Segoe UI", 10, "bold"),
+                relief="flat",
+                cursor="hand2"
+            ).pack(
+                side="left",
+                padx=15,
+                pady=12
+            )
+
+    
+
+    def create_form_page(
+        self,
+        title,
+        button_text,
+        button_command
+    ):
+
+        self.clear_root()
+
+        self.root.configure(
+            bg="#eef2f7"
+        )
+
+        
+        header = tk.Frame(
+            self.root,
+            bg="#17365d",
+            height=75
+        )
+
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        tk.Label(
+            header,
+            text="STOCK MANAGEMENT SYSTEM",
+            font=("Segoe UI", 20, "bold"),
+            bg="#17365d",
+            fg="white"
+        ).pack(
+            side="left",
+            padx=25,
+            pady=18
+        )
+
+        tk.Button(
+            header,
+            text="Logout",
+            command=self.logout,
+            bg="#b02a37",
+            fg="white",
+            relief="flat"
+        ).pack(
+            side="right",
+            padx=25,
+            pady=20,
+            ipadx=10
+        )
+
+        self.create_navigation()
+
+        main = tk.Frame(
+            self.root,
+            bg="#eef2f7"
+        )
+
+        main.pack(
+            fill="both",
+            expand=True,
+            padx=35,
+            pady=25
+        )
+
+        tk.Label(
+            main,
+            text=title,
+            font=("Segoe UI", 22, "bold"),
+            bg="#eef2f7",
+            fg="#17365d"
+        ).pack(
+            anchor="w",
+            pady=(0, 18)
+        )
+
+        form = tk.Frame(
+            main,
+            bg="white",
+            bd=1,
+            relief="solid"
+        )
+
+        form.pack(
+            fill="both",
+            expand=True
+        )
+
+        self.entries = {}
+
+        fields = [
+            ("Product Name", "product_name"),
+            ("Category", "category"),
+            ("Quantity", "quantity"),
+            ("Price", "price"),
+            ("Supplier", "supplier"),
+            ("Phone", "phone"),
+            ("Email", "email")
+        ]
+
+        left = tk.Frame(
+            form,
+            bg="white"
+        )
+
+        left.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(30, 15),
+            pady=25
+        )
+
+        right = tk.Frame(
+            form,
+            bg="white"
+        )
+
+        right.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(15, 30),
+            pady=25
+        )
+
+        for i, (label, key) in enumerate(fields):
+
+            target = (
+                left
+                if i < 4
+                else right
+            )
+
+            tk.Label(
+                target,
+                text=label,
+                font=("Segoe UI", 10, "bold"),
+                bg="white"
+            ).pack(
+                fill="x",
+                pady=(5, 4)
+            )
+
+            if key == "category":
+
+                widget = ttk.Combobox(
+                    target,
+                    values=[
+                        "Electronics",
+                        "Grocery",
+                        "Clothing",
+                        "Stationery",
+                        "Furniture",
+                        "Hardware",
+                        "Other"
+                    ],
+                    state="readonly"
+                )
+
+            else:
+
+                widget = tk.Entry(
+                    target,
+                    font=("Segoe UI", 10),
+                    relief="solid",
+                    bd=1
+                )
+
+            widget.pack(
+                fill="x",
+                ipady=7,
+                pady=(0, 12)
+            )
+
+            self.entries[key] = widget
+
+        buttons = tk.Frame(
+            main,
+            bg="#eef2f7"
+        )
+
+        buttons.pack(
+            fill="x",
+            pady=(15, 0)
+        )
+
+        tk.Button(
+            buttons,
+            text=button_text,
+            command=button_command,
+            bg="#198754",
+            fg="white",
+            font=("Segoe UI", 10, "bold"),
+            relief="flat",
+            cursor="hand2"
+        ).pack(
+            side="left",
+            ipadx=15,
+            ipady=8,
+            padx=(0, 10)
+        )
+
+        tk.Button(
+            buttons,
+            text="Clear / Reset",
+            command=self.clear_form,
+            bg="#6c757d",
+            fg="white",
+            font=("Segoe UI", 10, "bold"),
+            relief="flat",
+            cursor="hand2"
+        ).pack(
+            side="left",
+            ipadx=15,
+            ipady=8
+        )
+
+ 
+
+    def get_form_values(self):
+
+        return {
+            key: widget.get().strip()
+            for key, widget
+            in self.entries.items()
+        }
+
+    def validate_form(self, data):
+
+        required = [
+            "product_name",
+            "category",
+            "quantity",
+            "price",
+            "supplier",
+            "phone",
+            "email"
+        ]
+
+        for field in required:
+
+            if not data[field]:
+
+                messagebox.showwarning(
+                    "Validation",
+                    "Please fill all fields."
+                )
+
+                return False
+
+        if not valid_number(
+            data["quantity"]
+        ):
+
+            messagebox.showwarning(
+                "Validation",
+                "Quantity must be a whole number."
+            )
+
+            return False
+
+        if not valid_price(
+            data["price"]
+        ):
+
+            messagebox.showwarning(
+                "Validation",
+                "Price must be a valid number."
+            )
+
+            return False
+
+        if not valid_phone(
+            data["phone"]
+        ):
+
+            messagebox.showwarning(
+                "Validation",
+                "Phone number must contain exactly 10 digits."
+            )
+
+            return False
+
+        if not valid_email(
+            data["email"]
+        ):
+
+            messagebox.showwarning(
+                "Validation",
+                "Please enter a valid email."
+            )
+
+            return False
+
+        return True
+
+  
+
+    def show_add(self):
+
+        self.create_form_page(
+            "Add Stock Record",
+            "Save Record",
+            self.add_record
+        )
+
+    def add_record(self):
+
+        data = self.get_form_values()
+
+        if not self.validate_form(data):
+            return
+
+        conn = None
+        cursor = None
+
+        try:
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+           
+            cursor.execute("""
+                INSERT INTO stocks
+                (
+                    product_name,
+                    category,
+                    quantity,
+                    price,
+                    supplier,
+                    phone,
+                    email
+                )
+                VALUES
+                (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                data["product_name"],
+                data["category"],
+                int(data["quantity"]),
+                float(data["price"]),
+                data["supplier"],
+                data["phone"],
+                data["email"]
+            ))
+
+            conn.commit()
+
+            messagebox.showinfo(
+                "Success",
+                "Stock record added successfully."
+            )
+
+            self.clear_form()
+
+        except Error as e:
+
+            messagebox.showerror(
+                "Database Error",
+                str(e)
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if conn:
+                conn.close()
+
+   
+
+    def clear_form(self):
+
+        for widget in self.entries.values():
+
+            if isinstance(
+                widget,
+                ttk.Combobox
+            ):
+
+                widget.set("")
+
+            else:
+
+                widget.delete(
+                    0,
+                    tk.END
+                )
+
+        self.selected_id = None
+
+   
+    def show_view(self):
+
+        self.clear_root()
+
+        self.root.configure(
+            bg="#eef2f7"
+        )
+
+       
+        header = tk.Frame(
+            self.root,
+            bg="#17365d",
+            height=75
+        )
+
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        tk.Label(
+            header,
+            text="STOCK MANAGEMENT SYSTEM",
+            font=("Segoe UI", 20, "bold"),
+            bg="#17365d",
+            fg="white"
+        ).pack(
+            side="left",
+            padx=25,
+            pady=18
+        )
+
+        tk.Button(
+            header,
+            text="Logout",
+            command=self.logout,
+            bg="#b02a37",
+            fg="white",
+            relief="flat"
+        ).pack(
+            side="right",
+            padx=25,
+            pady=20,
+            ipadx=10
+        )
+
+        self.create_navigation()
+
+        main = tk.Frame(
+            self.root,
+            bg="#eef2f7"
+        )
+
+        main.pack(
+            fill="both",
+            expand=True,
+            padx=30,
+            pady=25
+        )
+
+        tk.Label(
+            main,
+            text="View / Manage Records",
+            font=("Segoe UI", 22, "bold"),
+            bg="#eef2f7",
+            fg="#17365d"
+        ).pack(
+            anchor="w"
+        )
+
+        table_frame = tk.Frame(
+            main,
+            bg="white"
+        )
+
+        table_frame.pack(
+            fill="both",
+            expand=True,
+            pady=18
+        )
+
+        columns = (
+            "id",
+            "product",
+            "category",
+            "quantity",
+            "price",
+            "supplier",
+            "phone",
+            "email"
+        )
+
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=columns,
+            show="headings"
+        )
+
+        headings = [
+            ("id", "ID", 50),
+            ("product", "Product", 130),
+            ("category", "Category", 100),
+            ("quantity", "Quantity", 80),
+            ("price", "Price", 90),
+            ("supplier", "Supplier", 120),
+            ("phone", "Phone", 110),
+            ("email", "Email", 180)
+        ]
+
+        for col, text, width in headings:
+
+            self.tree.heading(
+                col,
+                text=text
+            )
+
+            self.tree.column(
+                col,
+                width=width,
+                anchor="center"
+            )
+
+        scrollbar = ttk.Scrollbar(
+            table_frame,
+            orient="vertical",
+            command=self.tree.yview
+        )
+
+        self.tree.configure(
+            yscrollcommand=scrollbar.set
+        )
+
+        self.tree.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+
+        scrollbar.pack(
+            side="right",
+            fill="y"
+        )
+
+        actions = tk.Frame(
+            main,
+            bg="#eef2f7"
+        )
+
+        actions.pack(
+            fill="x"
+        )
+
+        tk.Button(
+            actions,
+            text="Update Selected",
+            command=self.update_selected,
+            bg="#0d6efd",
+            fg="white",
+            relief="flat"
+        ).pack(
+            side="left",
+            ipadx=12,
+            ipady=7,
+            padx=5
+        )
+
+        tk.Button(
+            actions,
+            text="Delete Selected",
+            command=self.delete_selected,
+            bg="#dc3545",
+            fg="white",
+            relief="flat"
+        ).pack(
+            side="left",
+            ipadx=12,
+            ipady=7,
+            padx=5
+        )
+
+        self.load_records()
+
+    
+
+    def load_records(self):
+
+        for item in self.tree.get_children():
+
+            self.tree.delete(item)
+
+        conn = None
+        cursor = None
+
+        try:
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # SELECT
+            cursor.execute("""
+                SELECT
+                    id,
+                    product_name,
+                    category,
+                    quantity,
+                    price,
+                    supplier,
+                    phone,
+                    email
+                FROM stocks
+                ORDER BY id DESC
+            """)
+
+            rows = cursor.fetchall()
+
+            for row in rows:
+
+                row = list(row)
+
+                row[4] = f"{float(row[4]):.2f}"
+
+                self.tree.insert(
+                    "",
+                    tk.END,
+                    values=row
+                )
+
+        except Error as e:
+
+            messagebox.showerror(
+                "Database Error",
+                str(e)
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if conn:
+                conn.close()
+
+   
+
+    def update_selected(self):
+
+        selected = self.tree.selection()
+
+        if not selected:
+
+            messagebox.showwarning(
+                "Update",
+                "Please select a record."
+            )
+
+            return
+
+        values = self.tree.item(
+            selected[0],
+            "values"
+        )
+
+        self.selected_id = values[0]
+
+        self.show_update_form(values)
+
+    def show_update_form(self, values):
+
+        self.create_form_page(
+            "Update Stock Record",
+            "Update Record",
+            self.update_record
+        )
+
+        data = [
+            ("product_name", values[1]),
+            ("category", values[2]),
+            ("quantity", values[3]),
+            ("price", values[4]),
+            ("supplier", values[5]),
+            ("phone", values[6]),
+            ("email", values[7])
+        ]
+
+        for key, value in data:
+
+            widget = self.entries[key]
+
+            if isinstance(
+                widget,
+                ttk.Combobox
+            ):
+
+                widget.set(value)
+
+            else:
+
+                widget.insert(
+                    0,
+                    value
+                )
+
+    def update_record(self):
+
+        if not self.selected_id:
+
+            messagebox.showwarning(
+                "Update",
+                "No record selected."
+            )
+
+            return
+
+        data = self.get_form_values()
+
+        if not self.validate_form(data):
+            return
+
+        conn = None
+        cursor = None
+
+        try:
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+           
+            cursor.execute("""
+                UPDATE stocks
+                SET
+                    product_name=%s,
+                    category=%s,
+                    quantity=%s,
+                    price=%s,
+                    supplier=%s,
+                    phone=%s,
+                    email=%s
+                WHERE id=%s
+            """, (
+                data["product_name"],
+                data["category"],
+                int(data["quantity"]),
+                float(data["price"]),
+                data["supplier"],
+                data["phone"],
+                data["email"],
+                self.selected_id
+            ))
+
+            conn.commit()
+
+            messagebox.showinfo(
+                "Success",
+                "Record updated successfully."
+            )
+
+            self.show_view()
+
+        except Error as e:
+
+            messagebox.showerror(
+                "Database Error",
+                str(e)
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if conn:
+                conn.close()
+
+   
+    def delete_selected(self):
+
+        selected = self.tree.selection()
+
+        if not selected:
+
+            messagebox.showwarning(
+                "Delete",
+                "Please select a record."
+            )
+
+            return
+
+        values = self.tree.item(
+            selected[0],
+            "values"
+        )
+
+        record_id = values[0]
+        product_name = values[1]
+
+        confirm = messagebox.askyesno(
+            "Confirm Delete",
+            f"Are you sure you want to delete "
+            f"'{product_name}'?"
+        )
+
+        if not confirm:
+            return
+
+        conn = None
+        cursor = None
+
+        try:
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            
+            cursor.execute(
+                "DELETE FROM stocks WHERE id=%s",
+                (record_id,)
+            )
+
+            conn.commit()
+
+            messagebox.showinfo(
+                "Deleted",
+                "Record deleted successfully."
+            )
+
+            self.load_records()
+
+        except Error as e:
+
+            messagebox.showerror(
+                "Database Error",
+                str(e)
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if conn:
+                conn.close()
+
+   
+    def show_search(self):
+
+        self.clear_root()
+
+        self.root.configure(
+            bg="#eef2f7"
+        )
+
+        
+        header = tk.Frame(
+            self.root,
+            bg="#17365d",
+            height=75
+        )
+
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        tk.Label(
+            header,
+            text="STOCK MANAGEMENT SYSTEM",
+            font=("Segoe UI", 20, "bold"),
+            bg="#17365d",
+            fg="white"
+        ).pack(
+            side="left",
+            padx=25,
+            pady=18
+        )
+
+        tk.Button(
+            header,
+            text="Logout",
+            command=self.logout,
+            bg="#b02a37",
+            fg="white",
+            relief="flat"
+        ).pack(
+            side="right",
+            padx=25,
+            pady=20,
+            ipadx=10
+        )
+
+        self.create_navigation()
+
+        main = tk.Frame(
+            self.root,
+            bg="#eef2f7"
+        )
+
+        main.pack(
+            fill="both",
+            expand=True,
+            padx=30,
+            pady=25
+        )
+
+        tk.Label(
+            main,
+            text="Search Stock",
+            font=("Segoe UI", 22, "bold"),
+            bg="#eef2f7",
+            fg="#17365d"
+        ).pack(
+            anchor="w"
+        )
+
+        search_bar = tk.Frame(
+            main,
+            bg="white",
+            bd=1,
+            relief="solid"
+        )
+
+        search_bar.pack(
+            fill="x",
+            pady=18,
+            ipady=8
+        )
+
+        tk.Label(
+            search_bar,
+            text="Search by:",
+            font=("Segoe UI", 10, "bold"),
+            bg="white"
+        ).pack(
+            side="left",
+            padx=(20, 8)
+        )
+
+        self.search_field = ttk.Combobox(
+            search_bar,
+            values=[
+                "Product Name",
+                "Category",
+                "Supplier",
+                "Phone",
+                "Email"
+            ],
+            state="readonly",
+            width=18
+        )
+
+        self.search_field.set(
+            "Product Name"
+        )
+
+        self.search_field.pack(
+            side="left",
+            padx=5
+        )
+
+        self.search_entry = tk.Entry(
+            search_bar,
+            font=("Segoe UI", 10),
+            relief="solid"
+        )
+
+        self.search_entry.pack(
+            side="left",
+            padx=8,
+            ipady=6,
+            fill="x",
+            expand=True
+        )
+
+        tk.Button(
+            search_bar,
+            text="Search",
+            command=self.perform_search,
+            bg="#17365d",
+            fg="white",
+            relief="flat"
+        ).pack(
+            side="left",
+            padx=8,
+            ipadx=12,
+            ipady=5
+        )
+
+        tk.Button(
+            search_bar,
+            text="Reset",
+            command=self.reset_search,
+            bg="#6c757d",
+            fg="white",
+            relief="flat"
+        ).pack(
+            side="left",
+            padx=(0, 15),
+            ipadx=10,
+            ipady=5
+        )
+
+        table_frame = tk.Frame(
+            main,
+            bg="white"
+        )
+
+        table_frame.pack(
+            fill="both",
+            expand=True
+        )
+
+        columns = (
+            "id",
+            "product",
+            "category",
+            "quantity",
+            "price",
+            "supplier",
+            "phone",
+            "email"
+        )
+
+        self.search_tree = ttk.Treeview(
+            table_frame,
+            columns=columns,
+            show="headings"
+        )
+
+        headings = [
+            ("id", "ID", 50),
+            ("product", "Product", 130),
+            ("category", "Category", 100),
+            ("quantity", "Quantity", 80),
+            ("price", "Price", 90),
+            ("supplier", "Supplier", 120),
+            ("phone", "Phone", 110),
+            ("email", "Email", 180)
+        ]
+
+        for col, text, width in headings:
+
+            self.search_tree.heading(
+                col,
+                text=text
+            )
+
+            self.search_tree.column(
+                col,
+                width=width,
+                anchor="center"
+            )
+
+        self.search_tree.pack(
+            fill="both",
+            expand=True
+        )
+
+        self.load_search_records()
+
+    def load_search_records(
+        self,
+        search_text=""
+    ):
+
+        for item in self.search_tree.get_children():
+
+            self.search_tree.delete(item)
+
+        conn = None
+        cursor = None
+
+        try:
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            if not search_text:
+
+                cursor.execute("""
+                    SELECT
+                        id,
+                        product_name,
+                        category,
+                        quantity,
+                        price,
+                        supplier,
+                        phone,
+                        email
+                    FROM stocks
+                    ORDER BY id DESC
+                """)
+
+            else:
+
+                field_map = {
+                    "Product Name": "product_name",
+                    "Category": "category",
+                    "Supplier": "supplier",
+                    "Phone": "phone",
+                    "Email": "email"
+                }
+
+                field = field_map[
+                    self.search_field.get()
+                ]
+
+                
+                query = f"""
+                    SELECT
+                        id,
+                        product_name,
+                        category,
+                        quantity,
+                        price,
+                        supplier,
+                        phone,
+                        email
+                    FROM stocks
+                    WHERE {field} LIKE %s
+                    ORDER BY id DESC
+                """
+
+                cursor.execute(
+                    query,
+                    (f"%{search_text}%",)
+                )
+
+            rows = cursor.fetchall()
+
+            for row in rows:
+
+                row = list(row)
+
+                row[4] = f"{float(row[4]):.2f}"
+
+                self.search_tree.insert(
+                    "",
+                    tk.END,
+                    values=row
+                )
+
+        except Error as e:
+
+            messagebox.showerror(
+                "Database Error",
+                str(e)
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if conn:
+                conn.close()
+
+    def perform_search(self):
+
+        text = self.search_entry.get().strip()
+
+        if not text:
+
+            messagebox.showwarning(
+                "Search",
+                "Please enter something to search."
+            )
+
+            return
+
+        self.load_search_records(
+            text
+        )
+
+    def reset_search(self):
+
+        self.search_entry.delete(
+            0,
+            tk.END
+        )
+
+        self.search_field.set(
+            "Product Name"
+        )
+
+        self.load_search_records()
+
+   
+    def logout(self):
+
+        confirm = messagebox.askyesno(
+            "Logout",
+            "Are you sure you want to logout?"
+        )
+
+        if confirm:
+            self.show_login()
+
+
+
+if __name__ == "__main__":
+
+    root = tk.Tk()
+
+    app = StockManagementSystem(
+        root
+    )
+
+    root.mainloop()
